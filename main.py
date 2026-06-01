@@ -79,7 +79,7 @@ def initialize_agent_models() -> tuple[ChatOpenAI, ChatOpenAI]:
             model="llama3.2",
             openai_api_key="ollama",
             openai_api_base="http://localhost:11434/v1",
-            temperature=0.2,
+            temperature=0.2, 
         )
         coder_model = ChatOpenAI(
             model="llama3.2",
