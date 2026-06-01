@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Multi-Agent Studio</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; max-width: 1000px; margin: 40px auto; padding: 20px; }
+        .container { background: #1e293b; border: 1px solid #334155; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h2 { margin-top: 0; color: #f8fafc; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 25px; }
+        input { flex: 1; padding: 14px; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 8px; font-size: 16px; }
+        input:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+        button { padding: 14px 28px; background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; transition: background 0.2s; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #64748b; cursor: not-allowed; }
+        .agent-block { background: #0f172a; border-left: 5px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; animation: fadeIn 0.4s ease-out; }
+        .agent-block.coder { border-left-color: #10b981; }
+        .agent-header { display: flex; align-items: center; gap: 10px; font-weight: bold; margin-bottom: 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .pm-badge { color: #3b82f6; }
+        .coder-badge { color: #10b981; }
+        pre { background: #020617; padding: 16px; border-radius: 6px; overflow-x: auto; color: #a7f3d0; border: 1px solid #1e293b; font-family: 'Courier New', Courier, monospace; }
+        .content-text { line-height: 1.6; white-space: pre-wrap; color: #cbd5e1; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🤖 LangGraph Multi-Agent Workspace</h2>
+        <p style="color: #94a3b8; margin-bottom: 20px;">Your request will be scoped by an Anthropic PM before writing code with Qwen-Coder-32B.</p>
+        
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="e.g., Write a python script to download images from a list of URLs...">
+            <button id="runBtn" onclick="triggerWorkflow()">Run Agents</button>
+        </div>
+
+        <div id="outputContainer"></div>
+    </div>
+
+    <script>
+    async function triggerWorkflow() {
+        const inputEl = document.getElementById('taskInput');
+        const btnEl = document.getElementById('runBtn');
+        const container = document.getElementById('outputContainer');
+        
+        const prompt = inputEl.value.trim();
+        if (!prompt) return alert("Please enter a task description first!");
+
+        // UI Loading State
+        inputEl.disabled = true;
+        btnEl.disabled = true;
+        container.innerHTML = "<div style='color: #3b82f6; font-style: italic;'>⚡ Initializing Agent Coordination Mesh...</div>";
+
+        try {
+            const response = await fetch('http://localhost:8000/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task: prompt })
+            });
+
+            if (!response.ok) throw new Error("Backend server error");
+            
+            container.innerHTML = ""; // Clear initial status message
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.replace('data: ', ''));
+                        
+                        // Structure visual block elements dynamically
+                        const block = document.createElement('div');
+                        const isCoder = data.agent === 'coder';
+                        block.className = `agent-block ${isCoder ? 'coder' : ''}`;
+                        
+                        const header = document.createElement('div');
+                        header.className = 'agent-header';
+                        header.innerHTML = isCoder 
+                            ? `<span class="coder-badge">💻 Qwen Engineer Node</span>` 
+                            : `<span class="pm-badge">📋 Claude PM Specification Node</span>`;
+                        
+                        const body = isCoder ? document.createElement('pre') : document.createElement('div');
+                        if (!isCoder) body.className = 'content-text';
+                        body.innerText = data.content;
+
+                        block.appendChild(header);
+                        block.appendChild(body);
+                        container.appendChild(block);
+                    }
+                }
+            }
+        } catch (error) {
+            container.innerHTML = `<div style="color: #ef4444;">❌ Error connecting to stream: ${error.message}. Make sure your uv backend is alive on port 8000.</div>`;
+        } finally {
+            inputEl.disabled = false;
+            btnEl.disabled = false;
+        }
+    }
+    </script>
+</body>
+</html>
