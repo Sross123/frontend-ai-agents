@@ -23,10 +23,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
+from app.tools import write_to_file, read_file, list_files
 
 # Initialize environment variables from the .env file
 load_dotenv()
@@ -118,11 +119,14 @@ class Personas:
     )
 
     CODER_SYSTEM = (
-        "You are an elite Frontend Software Engineer. "
-        "Write clean, clear, easy-to-read code with a strong sense of purpose. "
-        "You can do anything related to frontend development or frontend integration. "
-        "If the user already supplies complete business logic or existing project intent, do not rewrite or replace it; "
-        "only modify or add code that supports the stated requirements."
+        "You are an elite Frontend Software Engineer.\n\n"
+        "CRITICAL WORKFLOW (You MUST follow this sequence before writing any source code files):\n"
+        "1. Inspect existing files using `list_files` and `read_file` tools if updating or integrating.\n"
+        "2. **Create Plan**: Call `write_to_file` to create `plan.md` inside the workspace outlining the implementation design, layout decisions, and dependencies.\n"
+        "3. **Create Tasks Checklist**: Call `write_to_file` to create `tasks.md` inside the workspace containing a structured checklist of all source files to be created/updated.\n"
+        "4. **Write Code**: Implement files and use `write_to_file` to write source code files.\n"
+        "5. **Update Tasks Checklist**: Modify `tasks.md` to check off (`[x]`) all completed files and tasks.\n"
+        "6. Do NOT just output code as text in chat—always save the plan, tasks, and code files to the workspace using the tools."
     )
 
     @staticmethod
@@ -130,10 +134,13 @@ class Personas:
         return (
             f"Build pristine, modern, functional code based strictly on the following UI specification:\n\n"
             f"{specification}\n\n"
-            f"If the user has already provided full business logic, keep that logic intact and only write or change code around it. "
-            f"You may also handle frontend integration tasks such as connecting components, integrating APIs, or wiring data flows. "
-            f"Provide complete, copy-pasteable code blocks for HTML, CSS, JavaScript, React, or Next.js as requested. "
-            f"Enclose code snippets cleanly in markdown codeblocks."
+            "INSTRUCTIONS:\n"
+            "1. Read any existing files using `read_file` to understand the current state if relevant.\n"
+            "2. **CRITICAL FIRST STEP**: Call `write_to_file` to create `plan.md` (detailing implementation design) and `tasks.md` (checklist of files/tasks) inside the workspace folder BEFORE writing any code files.\n"
+            "3. Create or modify the necessary code files and save them using `write_to_file`.\n"
+            "4. Update `tasks.md` using `write_to_file` to check off (`[x]`) completed items.\n"
+            "5. Keep code clean, well-commented, and properly formatted.\n\n"
+            "CRITICAL: Always use `write_to_file` to save your work (planning, checklist, and code files) to the workspace!"
         )
 
 
@@ -153,6 +160,9 @@ class TeamState(TypedDict):
     
     # The identifier of the next agent scheduled to run
     next_agent: str
+
+    # Target directory for read/write operations
+    workspace: str
 
 
 # ================================================================================
@@ -181,16 +191,60 @@ async def coder_agent(state: TeamState) -> dict:
     """
     The Frontend Software Engineer Agent Node.
     Consumes the PM's specification and writes copy-pasteable UI code blocks.
+    Also executes tool calls (writing files to workspace).
     """
+    workspace = state.get("workspace", "./workspace")
     spec = state["specification"]
     
     # Retrieve system role and prompt instructions
     system_instruction = SystemMessage(content=Personas.CODER_SYSTEM)
     user_prompt = HumanMessage(content=Personas.get_coder_user_prompt(spec))
     
-    # Generate complete frontend code
-    response = await coder_llm.ainvoke([system_instruction, user_prompt])
+    # Bind the filesystem tools to the coder LLM
+    coder_with_tools = coder_llm.bind_tools([write_to_file, list_files, read_file])
     
+    messages = [system_instruction, user_prompt]
+    response = await coder_with_tools.ainvoke(messages)
+    
+    # Agentic loop: execute tool calls in response
+    tool_iteration = 0
+    max_iterations = 10  # Prevent infinite loops
+    
+    while response.tool_calls and tool_iteration < max_iterations:
+        tool_iteration += 1
+        messages.append(response)
+        tool_messages = []
+        
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            
+            # Inject workspace directory parameter if not present
+            if "workspace_dir" not in tool_args:
+                tool_args["workspace_dir"] = workspace
+                
+            try:
+                if tool_name == "write_to_file":
+                    tool_result = await write_to_file.ainvoke(tool_args)
+                elif tool_name == "list_files":
+                    tool_result = await list_files.ainvoke(tool_args)
+                elif tool_name == "read_file":
+                    tool_result = await read_file.ainvoke(tool_args)
+                else:
+                    tool_result = f"Error: Tool '{tool_name}' not found."
+                    
+            except Exception as e:
+                tool_result = f"Error executing tool: {str(e)}"
+                
+            tool_messages.append(ToolMessage(
+                content=str(tool_result),
+                tool_call_id=tool_call["id"],
+                name=tool_name
+            ))
+            
+        messages.extend(tool_messages)
+        response = await coder_with_tools.ainvoke(messages)
+        
     return {
         "messages": [AIMessage(content=response.content, name="Coder")],
         "next_agent": "end",
