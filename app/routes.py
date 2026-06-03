@@ -38,6 +38,7 @@ api.add_middleware(
 # ---------------------------------------------------------------------------
 class UserRequest(BaseModel):
     task: str
+    workspace: str = "./workspace"
 
 # ---------------------------------------------------------------------------
 # Streaming endpoint
@@ -47,14 +48,33 @@ async def generate_team_flow(request: UserRequest):
     """Execute the LangGraph flow and stream node results via SSE."""
 
     async def event_stream():
-        initial_state = {"messages": [HumanMessage(content=request.task)]}
+        initial_state = {
+            "messages": [HumanMessage(content=request.task)],
+            "workspace": request.workspace
+        }
         try:
-            async for output in app_graph.astream(initial_state, stream_mode="updates"):
-                for node_name, data in output.items():
-                    if "messages" in data and data["messages"]:
-                        latest_msg = data["messages"][-1].content
-                        payload = {"agent": node_name, "content": latest_msg}
-                        yield f"data: {json.dumps(payload)}\n\n"
+            started_nodes = set()
+            async for event in app_graph.astream_events(initial_state, version="v2"):
+                event_type = event["event"]
+                node_name = event["metadata"].get("langgraph_node")
+                
+                if node_name:
+                    clean_name = node_name.replace("_agent", "")
+                    if clean_name in ["pm", "coder"]:
+                        if event_type == "on_chain_start" and node_name not in started_nodes:
+                            started_nodes.add(node_name)
+                            payload = {"agent": clean_name, "content": "", "start": True}
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            
+                        elif event_type == "on_chat_model_stream":
+                            chunk_content = event["data"]["chunk"].content
+                            if chunk_content:
+                                payload = {"agent": clean_name, "content": chunk_content, "chunk": True}
+                                yield f"data: {json.dumps(payload)}\n\n"
+                                
+                        elif event_type == "on_chain_end" and node_name in started_nodes:
+                            payload = {"agent": clean_name, "content": "", "end": True}
+                            yield f"data: {json.dumps(payload)}\n\n"
         except Exception as e:
             error_payload = {"agent": "error", "content": f"Graph Execution Failed: {str(e)}"}
             yield f"data: {json.dumps(error_payload)}\n\n"

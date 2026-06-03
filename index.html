@@ -4,107 +4,1162 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Multi-Agent Studio</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; max-width: 1000px; margin: 40px auto; padding: 20px; }
-        .container { background: #1e293b; border: 1px solid #334155; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        h2 { margin-top: 0; color: #f8fafc; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 25px; }
-        input { flex: 1; padding: 14px; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 8px; font-size: 16px; }
-        input:focus { outline: 2px solid #3b82f6; border-color: transparent; }
-        button { padding: 14px 28px; background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; transition: background 0.2s; }
-        button:hover { background: #1d4ed8; }
-        button:disabled { background: #64748b; cursor: not-allowed; }
-        .agent-block { background: #0f172a; border-left: 5px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; animation: fadeIn 0.4s ease-out; }
-        .agent-block.coder { border-left-color: #10b981; }
-        .agent-header { display: flex; align-items: center; gap: 10px; font-weight: bold; margin-bottom: 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .pm-badge { color: #3b82f6; }
-        .coder-badge { color: #10b981; }
-        pre { background: #020617; padding: 16px; border-radius: 6px; overflow-x: auto; color: #a7f3d0; border: 1px solid #1e293b; font-family: 'Courier New', Courier, monospace; }
-        .content-text { line-height: 1.6; white-space: pre-wrap; color: #cbd5e1; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Modern CSS Variables & Resets */
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: rgba(17, 25, 40, 0.75);
+            --bg-card: rgba(30, 41, 59, 0.45);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --primary: #4f46e5;
+            --primary-glow: rgba(79, 70, 229, 0.35);
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            
+            --secondary: #10b981;
+            --secondary-glow: rgba(16, 185, 129, 0.25);
+            
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.1) 0px, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Layout Architecture */
+        header {
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(9, 13, 22, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 16px 40px;
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .logo-title h1 {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-title p {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--secondary);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 30px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--secondary);
+            border-radius: 50%;
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        main {
+            flex: 1;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 30px 40px;
+            display: grid;
+            grid-template-columns: 450px 1fr;
+            gap: 30px;
+            height: calc(100vh - 73px);
+            overflow: hidden;
+        }
+
+        @media (max-width: 1200px) {
+            main {
+                grid-template-columns: 1fr;
+                height: auto;
+                overflow: visible;
+            }
+        }
+
+        /* Glassmorphism Panel Common Styles */
+        .glass-panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Left Side: Control panel & Log output */
+        .control-side {
+            gap: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .control-card {
+            padding: 24px;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+        }
+
+        /* Beautiful text input area */
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 130px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: white;
+            padding: 16px;
+            font-size: 14px;
+            font-family: var(--font-sans);
+            resize: none;
+            outline: none;
+            transition: var(--transition);
+            line-height: 1.6;
+        }
+
+        textarea:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 15px var(--primary-glow);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        /* Preset Chips */
+        .presets-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .preset-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .preset-chip {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .preset-chip:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        /* Run button with glowing transitions */
+        .run-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            border: none;
+            background: var(--primary-gradient);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 20px var(--primary-glow);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .run-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.2),
+                transparent
+            );
+            transition: 0.5s;
+        }
+
+        .run-btn:hover::before {
+            left: 100%;
+        }
+
+        .run-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+        }
+
+        .run-btn:disabled {
+            background: #334155;
+            box-shadow: none;
+            cursor: not-allowed;
+            color: var(--text-muted);
+        }
+
+        /* Timeline and Log Card */
+        .log-card {
+            flex: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            min-height: 250px;
+        }
+
+        .timeline-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+            margin-left: 10px;
+            padding-left: 20px;
+            border-left: 2px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .timeline-step {
+            position: relative;
+            opacity: 0.4;
+            transition: var(--transition);
+        }
+
+        .timeline-step.active {
+            opacity: 1;
+        }
+
+        .timeline-step.completed {
+            opacity: 0.85;
+        }
+
+        .timeline-step.completed .step-indicator {
+            background: var(--secondary);
+            border-color: var(--secondary);
+            box-shadow: 0 0 10px var(--secondary-glow);
+        }
+
+        .timeline-step.active .step-indicator {
+            background: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 12px var(--primary-glow);
+            animation: pulse-blue 2s infinite;
+        }
+
+        @keyframes pulse-blue {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .step-indicator {
+            position: absolute;
+            left: -31px;
+            top: 2px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            transition: var(--transition);
+            z-index: 2;
+        }
+
+        .step-info h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .step-info p {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .step-detail {
+            font-size: 11px;
+            color: var(--accent);
+            margin-top: 4px;
+            font-family: var(--font-mono);
+            display: none;
+        }
+
+        .timeline-step.active .step-detail {
+            display: block;
+        }
+
+        /* Right Side: Tabbed workspace interface */
+        .workspace-side {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .workspace-tabs {
+            display: flex;
+            background: rgba(15, 23, 42, 0.4);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 16px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 18px 20px;
+            cursor: pointer;
+            position: relative;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            color: white;
+        }
+
+        .tab-btn.active {
+            color: white;
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--primary-gradient);
+        }
+
+        /* Workspace Content Panels */
+        .workspace-panels {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.15);
+        }
+
+        .panel-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 24px;
+            overflow-y: auto;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.25s ease-in-out;
+        }
+
+        .panel-content.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Specifications tab content styles */
+        .spec-container {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #cbd5e1;
+        }
+
+        .spec-container h3 {
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .spec-container h3:first-child {
+            margin-top: 0;
+        }
+
+        .spec-container ul {
+            margin-left: 20px;
+            margin-bottom: 16px;
+            color: #cbd5e1;
+        }
+
+        .spec-container li {
+            margin-bottom: 6px;
+        }
+
+        .spec-container p {
+            margin-bottom: 14px;
+        }
+
+        /* Code display styling */
+        .code-wrapper {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #020617;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .code-lang-tag {
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .utility-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: var(--font-sans);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .utility-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .code-display {
+            flex: 1;
+            background: #020617 !important;
+            color: #a7f3d0;
+            padding: 20px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            overflow: auto;
+            white-space: pre;
+            margin: 0;
+            border: none;
+        }
+
+        /* Live Iframe Sandbox Container */
+        .sandbox-iframe-container {
+            width: 100%;
+            height: 100%;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: white;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .sandbox-header {
+            background: #0f172a;
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sandbox-address-bar {
+            background: #090d16;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            width: 60%;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        iframe {
+            width: 100%;
+            flex: 1;
+            border: none;
+            background: white;
+        }
+
+        /* State Placeholder graphics */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            max-width: 320px;
+            line-height: 1.6;
+        }
+
+        /* Loading and connecting states inside tabs */
+        .loading-shimmer {
+            height: 14px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+            background-size: 200% 100%;
+            animation: loading-pulse 1.5s infinite;
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+        }
+
+        @keyframes loading-pulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>🤖 LangGraph Multi-Agent Workspace</h2>
-        <p style="color: #94a3b8; margin-bottom: 20px;">Your request will be scoped by an Anthropic PM before writing code with Qwen-Coder-32B.</p>
-        
-        <div class="input-group">
-            <input type="text" id="taskInput" placeholder="e.g., Write a python script to download images from a list of URLs...">
-            <button id="runBtn" onclick="triggerWorkflow()">Run Agents</button>
+    <!-- Header Section -->
+    <header>
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">🤖</div>
+                <div class="logo-title">
+                    <h1>LangGraph Multi-Agent Studio</h1>
+                    <p>Product Specification (Claude-3) + Elite Frontend Generation (Qwen-32B)</p>
+                </div>
+            </div>
+            
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span>Server Connected</span>
+            </div>
         </div>
+    </header>
 
-        <div id="outputContainer"></div>
-    </div>
+    <!-- Main Workspace -->
+    <main>
+        
+        <!-- Left Side: Inputs & Orchestrator logs -->
+        <div class="control-side">
+            
+            <!-- Control Card -->
+            <div class="glass-panel control-card">
+                <div class="panel-title">🎯 Control Center</div>
+                
+                <div class="input-wrapper">
+                    <textarea id="taskInput" placeholder="Describe the interface you want built... e.g. An elegant dark-mode Pomodoro timer with sleek glassmorphism design and custom ambient wave graphics."></textarea>
+                </div>
+                
+                <div class="workspace-wrapper" style="margin-top: 12px; margin-bottom: 8px;">
+                    <label for="workspaceInput" style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.7); display: block; margin-bottom: 6px;">📂 Target Workspace Folder</label>
+                    <input type="text" id="workspaceInput" value="./workspace" placeholder="e.g. ./workspace or /path/to/project" style="width: 100%; padding: 10px 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #fff; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; outline: none; transition: all 0.3s;" onfocus="this.style.borderColor='rgba(255,255,255,0.3)'; this.style.boxShadow='0 0 10px rgba(255,255,255,0.1)';" onblur="this.style.borderColor='rgba(255,255,255,0.1)'; this.style.boxShadow='none';">
+                </div>
+                
+                <div class="presets-title">💡 Standard presets</div>
+                <div class="preset-chips">
+                    <div class="preset-chip" onclick="applyPreset(this)">Glassmorphic Pomodoro Timer</div>
+                    <div class="preset-chip" onclick="applyPreset(this)">Elegant Weather Dashboard</div>
+                    <div class="preset-chip" onclick="applyPreset(this)">Stunning Task Kanban Board</div>
+                    <div class="preset-chip" onclick="applyPreset(this)">Vibrant Finance Wallet UI</div>
+                </div>
+                
+                <button class="run-btn" id="runBtn" onclick="triggerWorkflow()">
+                    <span>🚀 Launch Agent Mesh</span>
+                </button>
+            </div>
+            
+            <!-- Timeline / Active Stepper Card -->
+            <div class="glass-panel log-card">
+                <div class="panel-title">📈 Execution Timeline</div>
+                
+                <div class="timeline-steps">
+                    <!-- Step 1 -->
+                    <div class="timeline-step" id="step-idle">
+                        <div class="step-indicator">1</div>
+                        <div class="step-info">
+                            <h4>Await Instructions</h4>
+                            <p>System is in standby. Ready to process task parameters.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2 -->
+                    <div class="timeline-step" id="step-pm">
+                        <div class="step-indicator">2</div>
+                        <div class="step-info">
+                            <h4>Claude Spec Scoper</h4>
+                            <p>Analyzing requirements and drafting UX component schemas.</p>
+                            <div class="step-detail" id="step-pm-detail">Synthesizing design architecture...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3 -->
+                    <div class="timeline-step" id="step-coder">
+                        <div class="step-indicator">3</div>
+                        <div class="step-info">
+                            <h4>Qwen Coding Node</h4>
+                            <p>Assembling design components and coding pristine web page.</p>
+                            <div class="step-detail" id="step-coder-detail">Generating copy-pasteable assets...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4 -->
+                    <div class="timeline-step" id="step-preview">
+                        <div class="step-indicator">4</div>
+                        <div class="step-info">
+                            <h4>Live Sandbox Deployment</h4>
+                            <p>Compiling, mounting, and verifying active HTML preview.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="errorContainer"></div>
+            </div>
+        </div>
+        
+        <!-- Right Side: Workspace output & tabs -->
+        <div class="glass-panel workspace-side">
+            
+            <!-- Tabs Bar -->
+            <div class="workspace-tabs">
+                <button class="tab-btn active" onclick="switchTab('spec')">📋 Technical Specification</button>
+                <button class="tab-btn" onclick="switchTab('code')">💻 Generated Code</button>
+                <button class="tab-btn" onclick="switchTab('preview')">⚡ Live Preview</button>
+            </div>
+            
+            <!-- Panels Container -->
+            <div class="workspace-panels">
+                
+                <!-- Panel 1: Specs -->
+                <div class="panel-content active" id="panel-spec">
+                    <div class="empty-state" id="spec-empty">
+                        <div class="empty-icon">📝</div>
+                        <h3>Technical Specification</h3>
+                        <p>No specifications compiled. Run the agent workflow to view the structured PM layout plan.</p>
+                    </div>
+                    <div class="spec-container" id="specContainer" style="display: none;"></div>
+                </div>
+                
+                <!-- Panel 2: Code -->
+                <div class="panel-content" id="panel-code">
+                    <div class="empty-state" id="code-empty">
+                        <div class="empty-icon">💾</div>
+                        <h3>Source Code</h3>
+                        <p>The pristine HTML code will appear here once written by the Qwen Software Engineer node.</p>
+                    </div>
+                    <div class="code-wrapper" id="codeContainer" style="display: none;">
+                        <div class="code-header">
+                            <span class="code-lang-tag" id="codeLang">HTML/CSS/JS</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="utility-btn" onclick="copyCode()"><span id="copyText">📋 Copy</span></button>
+                                <button class="utility-btn" onclick="downloadCode()">📥 Download</button>
+                            </div>
+                        </div>
+                        <pre class="code-display" id="codeDisplay"></pre>
+                    </div>
+                </div>
+                
+                <!-- Panel 3: Live Preview Sandbox -->
+                <div class="panel-content" id="panel-preview">
+                    <div class="empty-state" id="preview-empty">
+                        <div class="empty-icon">🎨</div>
+                        <h3>Live Sandbox Sandbox</h3>
+                        <p>Once generated, the system will dynamically execute the output layout in this frame.</p>
+                    </div>
+                    <div class="sandbox-iframe-container" id="previewContainer" style="display: none;">
+                        <div class="sandbox-header">
+                            <div style="display:flex; gap: 6px;">
+                                <span style="width: 10px; height: 10px; border-radius:50%; background:#ef4444;"></span>
+                                <span style="width: 10px; height: 10px; border-radius:50%; background:#f59e0b;"></span>
+                                <span style="width: 10px; height: 10px; border-radius:50%; background:#10b981;"></span>
+                            </div>
+                            <div class="sandbox-address-bar">localhost:8000/sandbox.html</div>
+                            <button class="utility-btn" onclick="refreshSandbox()" style="padding: 4px 10px;">🔄 Reload</button>
+                        </div>
+                        <iframe id="previewIframe" sandbox="allow-scripts"></iframe>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+    </main>
 
     <script>
-    async function triggerWorkflow() {
-        const inputEl = document.getElementById('taskInput');
-        const btnEl = document.getElementById('runBtn');
-        const container = document.getElementById('outputContainer');
-        
-        const prompt = inputEl.value.trim();
-        if (!prompt) return alert("Please enter a task description first!");
+        // Preset values helper
+        function applyPreset(element) {
+            const input = document.getElementById('taskInput');
+            input.value = element.innerText + " built with clean, beautiful HTML, modern inline/embedded CSS styling, responsive grid layouts, subtle animations, and fully interactive javascript features.";
+            input.focus();
+        }
 
-        // UI Loading State
-        inputEl.disabled = true;
-        btnEl.disabled = true;
-        container.innerHTML = "<div style='color: #3b82f6; font-style: italic;'>⚡ Initializing Agent Coordination Mesh...</div>";
+        // Global tabs switcher
+        function switchTab(tabName) {
+            const tabs = document.querySelectorAll('.tab-btn');
+            const panels = document.querySelectorAll('.panel-content');
+            
+            // Deactivate all
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            
+            // Activate selected
+            let targetTab;
+            if (tabName === 'spec') targetTab = tabs[0];
+            else if (tabName === 'code') targetTab = tabs[1];
+            else if (tabName === 'preview') targetTab = tabs[2];
+            
+            if (targetTab) targetTab.classList.add('active');
+            
+            const targetPanel = document.getElementById(`panel-${tabName}`);
+            if (targetPanel) targetPanel.classList.add('active');
+        }
 
-        try {
-            const response = await fetch('http://localhost:8000/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task: prompt })
+        // Code and specifications memory state
+        let currentRawCode = "";
+        let currentSpecification = "";
+
+        // Copy button action
+        function copyCode() {
+            if (!currentRawCode) return;
+            navigator.clipboard.writeText(currentRawCode).then(() => {
+                const btnText = document.getElementById('copyText');
+                btnText.innerHTML = "✅ Copied!";
+                setTimeout(() => {
+                    btnText.innerHTML = "📋 Copy";
+                }, 2000);
+            }).catch(err => {
+                console.error("Clipboard copy failed: ", err);
+            });
+        }
+
+        // Download button action
+        function downloadCode() {
+            if (!currentRawCode) return;
+            const blob = new Blob([currentRawCode], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'generated_workspace.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Reload the sandbox iframe
+        function refreshSandbox() {
+            const iframe = document.getElementById('previewIframe');
+            if (iframe && currentRawCode) {
+                iframe.srcdoc = currentRawCode;
+            }
+        }
+
+        // Helper: Extract code blocks from Markdown
+        function extractCodeFromMarkdown(text) {
+            if (!text) return "";
+            
+            // Regular expression targeting standard markdown block code: ```html ... ```
+            const regex = /```(?:html|css|javascript|js|xml)?\s*\n([\s\S]*?)\n```/gi;
+            let match;
+            let codeBlocks = [];
+            
+            while ((match = regex.exec(text)) !== null) {
+                codeBlocks.push(match[1].trim());
+            }
+            
+            if (codeBlocks.length > 0) {
+                return codeBlocks[0]; // Returns first complete block found
+            }
+            
+            // Fallback: If no markdown block exists but raw text contains standard HTML wrappers
+            const trimmed = text.trim();
+            if (trimmed.startsWith('<') || trimmed.includes('<!DOCTYPE html>') || trimmed.includes('<html')) {
+                return trimmed;
+            }
+            
+            return text;
+        }
+
+        // Helper: Parse basic markdown into neat HTML tags for the Specification Tab
+        function formatMarkdownAsHTML(markdown) {
+            if (!markdown) return "";
+            let html = markdown
+                // Convert list items
+                .replace(/^\s*-\s+(.*)$/gim, '<li>$1</li>')
+                .replace(/^\s*\*\s+(.*)$/gim, '<li>$1</li>')
+                // Wrap block items in ul tag
+                .replace(/(<li>.*<\/li>)/sim, '<ul>$1</ul>')
+                // Headers 3
+                .replace(/^###\s+(.*)$/gim, '<h3>$1</h3>')
+                // Headers 2
+                .replace(/^##\s+(.*)$/gim, '<h3>$1</h3>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Newlines into spacing paragraphs
+                .replace(/\n\n/g, '<br><br>');
+                
+            return html;
+        }
+
+        // Active timeline visual controller
+        function updateTimeline(activeStepId, state) {
+            const steps = ['step-idle', 'step-pm', 'step-coder', 'step-preview'];
+            
+            steps.forEach(id => {
+                const element = document.getElementById(id);
+                if (!element) return;
+                
+                if (id === activeStepId) {
+                    element.className = 'timeline-step active';
+                } else if (steps.indexOf(id) < steps.indexOf(activeStepId)) {
+                    element.className = 'timeline-step completed';
+                } else {
+                    element.className = 'timeline-step';
+                }
             });
 
-            if (!response.ok) throw new Error("Backend server error");
+            if (state && activeStepId === 'step-pm') {
+                document.getElementById('step-pm-detail').innerText = state;
+            } else if (state && activeStepId === 'step-coder') {
+                document.getElementById('step-coder-detail').innerText = state;
+            }
+        }
+
+        // Core workflow execution call
+        async function triggerWorkflow() {
+            const inputEl = document.getElementById('taskInput');
+            const workspaceEl = document.getElementById('workspaceInput');
+            const btnEl = document.getElementById('runBtn');
+            const errorContainer = document.getElementById('errorContainer');
             
-            container.innerHTML = ""; // Clear initial status message
+            const prompt = inputEl.value.trim();
+            if (!prompt) return alert("Please specify the task or parameters first!");
             
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            const workspace = workspaceEl.value.trim() || "./workspace";
 
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
+            // Initialize visual states
+            inputEl.disabled = true;
+            workspaceEl.disabled = true;
+            btnEl.disabled = true;
+            errorContainer.innerHTML = "";
+            
+            // Clear prior memories
+            currentRawCode = "";
+            currentSpecification = "";
+            
+            // Clear content UI placeholders
+            document.getElementById('spec-empty').style.display = 'flex';
+            document.getElementById('specContainer').style.display = 'none';
+            document.getElementById('specContainer').innerHTML = "";
+            
+            document.getElementById('code-empty').style.display = 'flex';
+            document.getElementById('codeContainer').style.display = 'none';
+            document.getElementById('codeDisplay').innerText = "";
+            
+            document.getElementById('preview-empty').style.display = 'flex';
+            document.getElementById('previewContainer').style.display = 'none';
+            document.getElementById('previewIframe').srcdoc = "";
 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
+            // Timeline starts PM cycle
+            updateTimeline('step-pm', 'Coordinating Specification Scoper...');
+            switchTab('spec');
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.replace('data: ', ''));
-                        
-                        // Structure visual block elements dynamically
-                        const block = document.createElement('div');
-                        const isCoder = data.agent === 'coder';
-                        block.className = `agent-block ${isCoder ? 'coder' : ''}`;
-                        
-                        const header = document.createElement('div');
-                        header.className = 'agent-header';
-                        header.innerHTML = isCoder 
-                            ? `<span class="coder-badge">💻 Qwen Engineer Node</span>` 
-                            : `<span class="pm-badge">📋 Claude PM Specification Node</span>`;
-                        
-                        const body = isCoder ? document.createElement('pre') : document.createElement('div');
-                        if (!isCoder) body.className = 'content-text';
-                        body.innerText = data.content;
+            try {
+                const response = await fetch('http://localhost:8000/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task: prompt, workspace: workspace })
+                });
 
-                        block.appendChild(header);
-                        block.appendChild(body);
-                        container.appendChild(block);
+                if (!response.ok) throw new Error(`Backend server responded with status: ${response.status}`);
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let streamBuffer = ''; // Crucial fragment buffer to ensure SSE safety
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    // Append newly arrived stream bytes to buffer
+                    streamBuffer += decoder.decode(value, { stream: true });
+                    const lines = streamBuffer.split('\n');
+
+                    // Retain the last incomplete chunk segment inside our line accumulator
+                    streamBuffer = lines.pop();
+
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('data: ')) {
+                            try {
+                                const payload = JSON.parse(trimmedLine.substring(6));
+                                
+                                if (payload.agent === 'pm') {
+                                    if (payload.start) {
+                                        currentSpecification = "";
+                                        const specContainer = document.getElementById('specContainer');
+                                        specContainer.innerHTML = "";
+                                        document.getElementById('spec-empty').style.display = 'none';
+                                        specContainer.style.display = 'block';
+                                        updateTimeline('step-pm', 'Coordinating Specification Scoper...');
+                                    }
+                                    else if (payload.chunk) {
+                                        currentSpecification += payload.content;
+                                        const specContainer = document.getElementById('specContainer');
+                                        specContainer.innerHTML = formatMarkdownAsHTML(currentSpecification);
+                                    }
+                                    else if (payload.end) {
+                                        updateTimeline('step-coder', 'Synthesizing layout components...');
+                                        switchTab('code');
+                                    }
+                                } 
+                                else if (payload.agent === 'coder') {
+                                    if (payload.start) {
+                                        currentRawCode = "";
+                                        const codeDisplay = document.getElementById('codeDisplay');
+                                        codeDisplay.innerText = "";
+                                        document.getElementById('code-empty').style.display = 'none';
+                                        document.getElementById('codeContainer').style.display = 'flex';
+                                        updateTimeline('step-coder', 'Synthesizing layout components...');
+                                    }
+                                    else if (payload.chunk) {
+                                        currentRawCode += payload.content;
+                                        const codeDisplay = document.getElementById('codeDisplay');
+                                        codeDisplay.innerText = currentRawCode;
+                                    }
+                                    else if (payload.end) {
+                                        // Extract final clean code
+                                        const cleanCode = extractCodeFromMarkdown(currentRawCode);
+                                        currentRawCode = cleanCode;
+                                        
+                                        const codeDisplay = document.getElementById('codeDisplay');
+                                        codeDisplay.innerText = cleanCode;
+                                        
+                                        const iframe = document.getElementById('previewIframe');
+                                        iframe.srcdoc = cleanCode;
+                                        
+                                        document.getElementById('preview-empty').style.display = 'none';
+                                        document.getElementById('previewContainer').style.display = 'flex';
+                                        
+                                        updateTimeline('step-preview', 'Mounting responsive Sandbox...');
+                                        setTimeout(() => {
+                                            switchTab('preview');
+                                            updateTimeline('step-idle', 'Standby');
+                                        }, 1000);
+                                    }
+                                }
+                                else if (payload.agent === 'error') {
+                                    throw new Error(payload.content);
+                                }
+                            } catch (parseError) {
+                                console.warn("Robust parser successfully isolated SSE JSON chunk mismatch:", parseError);
+                            }
+                        }
                     }
                 }
+            } catch (error) {
+                console.error("Agent flow execution crashed: ", error);
+                errorContainer.innerHTML = `
+                    <div class="alert-error">
+                        <strong>❌ Execution Error:</strong><br>
+                        ${error.message}<br>
+                        <span style="font-size:11px; color:rgba(255,255,255,0.6);">
+                            Please verify your main.py backend is active and listening on port 8000.
+                        </span>
+                    </div>`;
+                updateTimeline('step-idle', 'Standby');
+            } finally {
+                inputEl.disabled = false;
+                workspaceEl.disabled = false;
+                btnEl.disabled = false;
             }
-        } catch (error) {
-            container.innerHTML = `<div style="color: #ef4444;">❌ Error connecting to stream: ${error.message}. Make sure your uv backend is alive on port 8000.</div>`;
-        } finally {
-            inputEl.disabled = false;
-            btnEl.disabled = false;
         }
-    }
+
+        // Initialize state
+        updateTimeline('step-idle', 'Standby');
     </script>
 </body>
 </html>
