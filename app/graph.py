@@ -6,75 +6,74 @@ This module isolates the LangGraph workflow from the HTTP layer.
 
 from typing import Annotated, TypedDict
 import operator
-import os
+import logging
 import contextvars
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
-from langchain_core.tools import tool
 
 from .agents import initialize_agent_models
-from .mcp_server import write_to_file as mcp_write_to_file, list_files as mcp_list_files, read_file as mcp_read_file
+from .tools import write_to_file, list_files, read_file
+
+logger = logging.getLogger(__name__)
 
 # Request-scoped context variable to dynamically bind the active target workspace path
 workspace_ctx = contextvars.ContextVar("workspace_dir", default="./workspace")
 
-@tool
-async def write_to_file(path: str, content: str) -> str:
-    """Writes code to a file in the workspace.
-    
-    Args:
-        path: The relative path of the file (e.g. 'index.html').
-        content: The complete raw code content.
-    """
-    base_dir = os.path.abspath(workspace_ctx.get())
-    full_path = os.path.normpath(os.path.join(base_dir, path))
-    
-    # Security: Stay in the workspace folder
-    if not full_path.startswith(base_dir):
-        return "Error: Access denied."
-        
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    with open(full_path, "w") as f:
-        f.write(content)
-    return f"File {path} created/updated successfully."
+# ---------------------------------------------------------------------------
+# Prompts (Personas)
+# ---------------------------------------------------------------------------
+class Personas:
+    """System prompts for the specialized agents."""
 
-@tool
-async def list_files(directory: str = ".") -> list[str]:
-    """Lists files in the workspace.
-    
-    Args:
-        directory: The sub-directory to list (default is root '.').
-    """
-    base_dir = os.path.abspath(workspace_ctx.get())
-    target_dir = os.path.normpath(os.path.join(base_dir, directory))
-    
-    if not target_dir.startswith(base_dir):
-        return ["Error: Access denied."]
-        
-    if not os.path.exists(target_dir):
-        return []
-        
-    return os.listdir(target_dir)
+    PRODUCT_MANAGER_SYSTEM = (
+        "You are an expert Frontend Product Manager and UI/UX Designer with deep expertise "
+        "in modern web design, responsive layouts, and user experience.\n\n"
+        "Your task: Analyze the user's interface request and produce a crystal-clear technical specification.\n\n"
+        "For NEW projects, outline:\n"
+        "1. **Component Structure**: Break down the interface into reusable components (header, hero, cards, etc.)\n"
+        "2. **Layout & Responsiveness**: Describe grid/flexbox layouts, breakpoints, and mobile adaptation\n"
+        "3. **Styling Design Tokens**: Color palette, typography, spacing, shadows, border-radius\n"
+        "4. **Interactive Behaviors**: Hover effects, animations, state changes, and user interactions\n"
+        "5. **Content Requirements**: What text, images, or data elements are needed\n\n"
+        "For UPDATES to existing projects:\n"
+        "1. First, analyze the current file structure using the tools available\n"
+        "2. Identify what exists and what needs modification or addition\n"
+        "3. Provide precise, actionable update instructions\n\n"
+        "OUTPUT FORMAT: Be specific, concise, and ready for a developer to implement."
+    )
 
-@tool
-async def read_file(path: str) -> str:
-    """Reads the content of a file in the workspace to understand existing code.
-    
-    Args:
-        path: The relative path of the file (e.g. 'index.html').
-    """
-    base_dir = os.path.abspath(workspace_ctx.get())
-    full_path = os.path.normpath(os.path.join(base_dir, path))
-    
-    if not full_path.startswith(base_dir):
-        return "Error: Access denied."
-        
-    if not os.path.exists(full_path):
-        return f"Error: File {path} does not exist."
-        
-    with open(full_path, "r") as f:
-        return f.read()
+    CODER_SYSTEM = (
+        "You are an elite Frontend Software Engineer with mastery in HTML5, modern CSS (Grid, Flexbox, animations), "
+        "and vanilla JavaScript.\n\n"
+        "Your objective: Generate production-ready, single-file HTML applications that are:\n"
+        "- **Pristine & Clean**: Well-organized, readable, properly indented code\n"
+        "- **Functional**: All interactive features work as specified\n"
+        "- **Responsive**: Adapt seamlessly to all screen sizes\n"
+        "- **Modern**: Use current CSS features (CSS variables, animations, gradients)\n"
+        "- **Accessible**: Semantic HTML, proper ARIA labels where needed\n\n"
+        "WORKFLOW:\n"
+        "1. Inspect existing files using `list_files` and `read_file` tools if updating\n"
+        "2. Understand the specification or existing code structure\n"
+        "3. Write the complete, final HTML/CSS/JS code\n"
+        "4. **Use the `write_to_file` tool to persist the code to the workspace**\n"
+        "5. Do NOT just describe or output code in text—always finalize via the tool\n\n"
+        "OUTPUT: Use tools to write files directly. Provide inline explanations only for complex logic."
+    )
+
+    @staticmethod
+    def get_coder_user_prompt(specification: str) -> str:
+        return (
+            f"Build or update code based on this specification:\n\n"
+            f"{specification}\n\n"
+            "INSTRUCTIONS:\n"
+            "1. If updating an existing file: Read it first using `read_file` to understand the current state\n"
+            "2. Create or modify the necessary files (HTML, CSS, JS)\n"
+            "3. Use the `write_to_file` tool to persist each file to the workspace\n"
+            "4. Ensure all interactive features from the spec are implemented and tested\n"
+            "5. Keep code clean, well-commented for complex sections, and properly formatted\n\n"
+            "CRITICAL: Always use `write_to_file` to save your work to the workspace!"
+        )
 
 # ---------------------------------------------------------------------------
 # State Schema
@@ -94,95 +93,113 @@ class TeamState(TypedDict):
     workspace: str
 
 # ---------------------------------------------------------------------------
-# Prompts (Personas)
-# ---------------------------------------------------------------------------
-class Personas:
-    """System prompts for the specialized agents."""
-
-    PRODUCT_MANAGER_SYSTEM = (
-        "You are an expert Frontend Product Manager and UI/UX Designer.\n\n"
-        "Analyze the user's interface request. If the user wants to add or update features "
-        "in an existing project workspace, analyze the current file structure and describe "
-        "precisely what layout changes, additions, or code updates need to be made.\n"
-        "Otherwise, outline a brand-new technical specification:\n"
-        "1. Component structure and layout hierarchy.\n"
-        "2. Styling requirements, responsiveness, and color themes.\n"
-        "3. Interactive behavior, events, and state management logic needed."
-    )
-
-    CODER_SYSTEM = (
-        "You are an elite Frontend Software Engineer.\n\n"
-        "Your objective is to generate functional, high-quality frontends.\n"
-        "You can inspect existing workspace files using `list_files` and `read_file` to understand "
-        "the current codebase before adding or updating features.\n"
-        "Crucially, you MUST use the `write_to_file` tool to write the finalized "
-        "pristine code directly to the workspace (e.g., 'index.html'). "
-        "Do not simply talk about the code or output code blocks in text; "
-        "you must call the tool to finalize the workspace."
-    )
-
-    @staticmethod
-    def get_coder_user_prompt(specification: str) -> str:
-        return (
-            f"Build or update pristine, modern, functional code based strictly on the following UI specification:\n\n"
-            f"{specification}\n\n"
-            "If updating an existing file, read it first, then output the complete updated code block. "
-            "Enclose code snippets cleanly in markdown codeblocks. Remember to write the code via the write_to_file tool!"
-        )
-
-# ---------------------------------------------------------------------------
 # Agent Nodes (Workers)
 # ---------------------------------------------------------------------------
 # Initialise LLMs once – they are reused by both nodes.
 pm_llm, coder_llm = initialize_agent_models()
 
+
+# ---------------------------------------------------------------------------
+# Agent Nodes (Workers)
+# ---------------------------------------------------------------------------
+# Initialize LLMs once – they are reused by both nodes.
+pm_llm, coder_llm = initialize_agent_models()
+
+
 async def pm_agent(state: TeamState) -> dict:
-    """Product Manager node – creates a UI specification."""
-    user_messages = state["messages"]
-    response = await pm_llm.ainvoke([
-        SystemMessage(content=Personas.PRODUCT_MANAGER_SYSTEM)
-    ] + user_messages)
-    return {
-        "messages": [AIMessage(content=response.content, name="ProductManager")],
-        "specification": response.content,
-        "next_agent": "coder",
-    }
+    """Product Manager node – analyzes request and creates a UI specification.
+    
+    Args:
+        state: Current team state containing user messages.
+        
+    Returns:
+        Updated state with specification and next agent assignment.
+        
+    Raises:
+        Exception: If LLM invocation fails (caught by graph executor).
+    """
+    try:
+        user_messages = state["messages"]
+        logger.info(f"PM Agent: Processing user request")
+        
+        response = await pm_llm.ainvoke([
+            SystemMessage(content=Personas.PRODUCT_MANAGER_SYSTEM)
+        ] + user_messages)
+        
+        logger.info(f"PM Agent: Generated specification ({len(response.content)} chars)")
+        
+        return {
+            "messages": [AIMessage(content=response.content, name="ProductManager")],
+            "specification": response.content,
+            "next_agent": "coder",
+        }
+    except Exception as e:
+        logger.error(f"PM Agent failed: {str(e)}", exc_info=True)
+        raise
+
 
 async def coder_agent(state: TeamState) -> dict:
-    """Coder node – generates frontend code and writes it to the filesystem."""
+    """Coder node – generates frontend code and writes to workspace.
+    
+    Args:
+        state: Current team state containing specification and workspace path.
+        
+    Returns:
+        Updated state with generated code and end signal.
+        
+    Raises:
+        Exception: If LLM invocation or file operations fail.
+    """
     # Dynamically bind request-scoped workspace directory
     workspace = state.get("workspace", "./workspace")
     token = workspace_ctx.set(workspace)
     
     try:
+        logger.info(f"Coder Agent: Starting code generation in workspace: {workspace}")
+        
         spec = state["specification"]
         system_instruction = SystemMessage(content=Personas.CODER_SYSTEM)
         user_prompt = HumanMessage(content=Personas.get_coder_user_prompt(spec))
         
-        # Bind the write_to_file, list_files, and read_file tools to the coder_llm
+        # Bind the filesystem tools to the coder LLM
         coder_with_tools = coder_llm.bind_tools([write_to_file, list_files, read_file])
         
         messages = [system_instruction, user_prompt]
         response = await coder_with_tools.ainvoke(messages)
         
-        # Check if the agent initiated any tool calls, and execute them in a loop
-        while response.tool_calls:
-            # Append the agent's response containing the tool call to the message history
-            messages.append(response)
+        # Agentic loop: execute tool calls in response
+        tool_iteration = 0
+        max_iterations = 10  # Prevent infinite loops
+        
+        while response.tool_calls and tool_iteration < max_iterations:
+            tool_iteration += 1
+            logger.debug(f"Coder Agent: Tool call iteration {tool_iteration}")
             
+            messages.append(response)
             tool_messages = []
+            
             for tool_call in response.tool_calls:
                 tool_name = tool_call["name"]
                 tool_args = tool_call["args"]
                 
-                if tool_name == "write_to_file":
-                    tool_result = await write_to_file.ainvoke(tool_args)
-                elif tool_name == "list_files":
-                    tool_result = await list_files.ainvoke(tool_args)
-                elif tool_name == "read_file":
-                    tool_result = await read_file.ainvoke(tool_args)
-                else:
-                    tool_result = f"Error: Tool '{tool_name}' not found."
+                logger.debug(f"Coder Agent: Executing tool '{tool_name}' with args: {list(tool_args.keys())}")
+                
+                try:
+                    if tool_name == "write_to_file":
+                        tool_result = await write_to_file.ainvoke(tool_args)
+                    elif tool_name == "list_files":
+                        tool_result = await list_files.ainvoke(tool_args)
+                    elif tool_name == "read_file":
+                        tool_result = await read_file.ainvoke(tool_args)
+                    else:
+                        tool_result = f"Error: Tool '{tool_name}' not found."
+                        logger.warning(f"Coder Agent: Unknown tool '{tool_name}'")
+                    
+                    logger.debug(f"Coder Agent: Tool result: {str(tool_result)[:100]}...")
+                        
+                except Exception as e:
+                    logger.error(f"Coder Agent: Tool execution failed: {str(e)}", exc_info=True)
+                    tool_result = f"Error executing tool: {str(e)}"
                     
                 tool_messages.append(ToolMessage(
                     content=str(tool_result),
@@ -192,24 +209,46 @@ async def coder_agent(state: TeamState) -> dict:
                 
             messages.extend(tool_messages)
             
-            # Invoke the coder LLM again with tools and the execution results
+            # Invoke coder LLM again with tool results
             response = await coder_with_tools.ainvoke(messages)
-            
+        
+        if tool_iteration >= max_iterations:
+            logger.warning(f"Coder Agent: Reached max iterations ({max_iterations}), stopping")
+        
+        logger.info(f"Coder Agent: Code generation completed after {tool_iteration} tool iterations")
+        
+        return {
+            "messages": [AIMessage(content=response.content, name="Coder")],
+            "next_agent": "end",
+        }
+        
+    except Exception as e:
+        logger.error(f"Coder Agent failed: {str(e)}", exc_info=True)
+        raise
     finally:
         workspace_ctx.reset(token)
-        
-    return {
-        "messages": [AIMessage(content=response.content, name="Coder")],
-        "next_agent": "end",
-    }
+
 
 def routing_router(state: TeamState) -> str:
-    """Conditional router – decides the next node based on ``next_agent``."""
-    if state.get("next_agent") == "coder":
+    """Conditional router – decides the next node based on ``next_agent`` flag.
+    
+    Args:
+        state: Current team state.
+        
+    Returns:
+        Name of next node ("coder") or END signal.
+    """
+    next_agent = state.get("next_agent", "end")
+    logger.debug(f"Routing: next_agent = {next_agent}")
+    
+    if next_agent == "coder":
         return "coder"
     return END
 
-# Build the graph
+
+# ---------------------------------------------------------------------------
+# Build the LangGraph
+# ---------------------------------------------------------------------------
 builder = StateGraph(TeamState)
 builder.add_node("pm", pm_agent)
 builder.add_node("coder", coder_agent)
@@ -226,3 +265,5 @@ builder.add_edge("coder", END)
 
 # Compiled graph – used by the FastAPI route layer.
 graph = builder.compile()
+
+logger.info("LangGraph compiled and ready")

@@ -142,6 +142,17 @@ http://localhost:8000
 
 ---
 
+## � Documentation
+
+Comprehensive guides and resources for development, security, and deployment:
+
+- **[Development Guide](docs/DEVELOPMENT.md)** - Project structure, configuration, running tests, debugging, best practices, and contributing guidelines.
+- **[Security Guide](docs/SECURITY.md)** - Security features, best practices, implementation details, monitoring, and recommendations.
+- **[Code Review Fixes Summary](docs/FIXES_SUMMARY.md)** - Summary of all improvements addressing code review findings.
+- **[MCP Status](docs/MCP_STATUS.md)** - MCP server status, integration options, and recommendations.
+
+---
+
 ## 📡 Model Context Protocol (MCP) Server
 
 Expose secure filesystem tools directly to external AI editors and clients (e.g., **Cursor**, **Claude Desktop**) using the integrated **Model Context Protocol (MCP)** server:
@@ -169,6 +180,9 @@ Add the following configuration to your MCP settings file (e.g., `claude_desktop
   }
 }
 ```
+
+> [!NOTE]
+> See [docs/MCP_STATUS.md](docs/MCP_STATUS.md) for current MCP integration status and recommendations.
 
 ---
 
