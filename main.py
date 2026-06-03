@@ -106,15 +106,23 @@ class Personas:
 
     PRODUCT_MANAGER_SYSTEM = (
         "You are an expert Frontend Product Manager and UI/UX Designer. "
-        "Analyze the user's interface request and expand it into a clear, "
-        "step-by-step technical specification outlining:\n"
+        "Before creating anything, understand the business purpose, the problem being solved, "
+        "and the user's core goals. If the user provides full project business logic, preserve it and "
+        "only suggest code or structure changes around that existing logic. "
+        "Treat every request as a frontend development or frontend integration task, including UI design, component wiring, "
+        "API integration, build setup, or framework adaptation. "
+        "Then expand the interface request into a clear, step-by-step technical specification outlining:\n"
         "1. Component structure and layout hierarchy.\n"
         "2. Styling requirements, responsiveness, and color themes.\n"
         "3. Interactive behavior, events, and state management logic needed."
     )
 
     CODER_SYSTEM = (
-        "You are an elite Frontend Software Engineer."
+        "You are an elite Frontend Software Engineer. "
+        "Write clean, clear, easy-to-read code with a strong sense of purpose. "
+        "You can do anything related to frontend development or frontend integration. "
+        "If the user already supplies complete business logic or existing project intent, do not rewrite or replace it; "
+        "only modify or add code that supports the stated requirements."
     )
 
     @staticmethod
@@ -122,7 +130,9 @@ class Personas:
         return (
             f"Build pristine, modern, functional code based strictly on the following UI specification:\n\n"
             f"{specification}\n\n"
-            f"Provide complete, copy-pasteable code blocks (HTML, CSS, or JavaScript/React as requested). "
+            f"If the user has already provided full business logic, keep that logic intact and only write or change code around it. "
+            f"You may also handle frontend integration tasks such as connecting components, integrating APIs, or wiring data flows. "
+            f"Provide complete, copy-pasteable code blocks for HTML, CSS, JavaScript, React, or Next.js as requested. "
             f"Enclose code snippets cleanly in markdown codeblocks."
         )
 
@@ -242,28 +252,46 @@ api.add_middleware(
 
 class UserRequest(BaseModel):
     task: str
+    workspace: str = "./workspace"
 
 
 @api.post("/generate")
 async def generate_team_flow(request: UserRequest):
     """
     Executes the LangGraph multi-agent flow asynchronously,
-    streaming node updates to the client using Server-Sent Events (SSE).
+    streaming node updates to the client using Server-Sent Events (SSE) v2.
     """
 
     async def event_stream():
-        initial_state = {"messages": [HumanMessage(content=request.task)]}
+        initial_state = {
+            "messages": [HumanMessage(content=request.task)],
+            "workspace": request.workspace
+        }
         
         try:
-            # Streams structural updates node-by-node
-            async for output in app.astream(initial_state, stream_mode="updates"):
-                for node_name, data in output.items():
-                    if "messages" in data and data["messages"]:
-                        # Extract the final completed content from the node
-                        latest_msg = data["messages"][-1].content
-                        payload = {"agent": node_name, "content": latest_msg}
-                        yield f"data: {json.dumps(payload)}\n\n"
-                        
+            started_nodes = set()
+            async for event in app.astream_events(initial_state, version="v2"):
+                event_type = event["event"]
+                node_name = event["metadata"].get("langgraph_node")
+                
+                if node_name:
+                    clean_name = node_name.replace("_agent", "")
+                    if clean_name in ["pm", "coder"]:
+                        if event_type == "on_chain_start" and node_name not in started_nodes:
+                            started_nodes.add(node_name)
+                            payload = {"agent": clean_name, "content": "", "start": True}
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            
+                        elif event_type == "on_chat_model_stream":
+                            chunk_content = event["data"]["chunk"].content
+                            if chunk_content:
+                                payload = {"agent": clean_name, "content": chunk_content, "chunk": True}
+                                yield f"data: {json.dumps(payload)}\n\n"
+                                
+                        elif event_type == "on_chain_end" and node_name in started_nodes:
+                            payload = {"agent": clean_name, "content": "", "end": True}
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            
         except Exception as e:
             # Gracefully streams any execution error back to the frontend
             error_payload = {
@@ -279,6 +307,62 @@ async def generate_team_flow(request: UserRequest):
 # EPILOGUE: THE SECURE STATIC GATE
 # ================================================================================
 static_dir = pathlib.Path(__file__).parent
+
+
+@api.get("/api/browse")
+async def browse_directory(path: str = None):
+    """Browse directories on the server's local machine."""
+    import os
+    import platform
+    try:
+        drives = []
+        is_windows = platform.system() == "Windows"
+        if is_windows:
+            import ctypes
+            bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+            for letter in map(chr, range(65, 91)):
+                if bitmask & 1:
+                    drives.append(f"{letter}:\\")
+                bitmask >>= 1
+
+        if not path:
+            current_dir = os.getcwd()
+        else:
+            current_dir = os.path.abspath(path)
+            
+        if not os.path.exists(current_dir):
+            return {"error": f"Path '{current_dir}' does not exist"}
+            
+        if not os.path.isdir(current_dir):
+            return {"error": f"Path '{current_dir}' is not a directory"}
+            
+        items = []
+        try:
+            for entry in os.scandir(current_dir):
+                try:
+                    if entry.is_dir() and not entry.name.startswith('.'):
+                        items.append(entry.name)
+                except PermissionError:
+                    continue
+        except PermissionError:
+            return {
+                "current_path": current_dir,
+                "parent_path": os.path.dirname(current_dir) if current_dir != os.path.dirname(current_dir) else None,
+                "directories": [],
+                "drives": drives,
+                "error": "Permission Denied"
+            }
+            
+        items.sort(key=str.lower)
+        
+        return {
+            "current_path": current_dir,
+            "parent_path": os.path.dirname(current_dir) if current_dir != os.path.dirname(current_dir) else None,
+            "directories": items,
+            "drives": drives
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @api.get("/")

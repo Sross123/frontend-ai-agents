@@ -18,7 +18,8 @@ class TestFileSystemSecurity:
         """Test that valid paths within workspace are accepted."""
         base = "/home/user/workspace"
         result = validate_workspace_path(base, "file.html")
-        assert result == "/home/user/workspace/file.html"
+        expected = os.path.normpath(os.path.join(os.path.abspath(base), "file.html"))
+        assert result == expected
 
     def test_validate_workspace_path_traversal_blocked(self):
         """Test that directory traversal attempts are blocked."""
@@ -43,28 +44,28 @@ class TestFileOperations:
             test_content = "<html><body>Hello</body></html>"
 
             # Write file
-            result = await write_to_file(
-                path="index.html",
-                content=test_content,
-                workspace_dir=tmpdir
-            )
+            result = await write_to_file.ainvoke({
+                "path": "index.html",
+                "content": test_content,
+                "workspace_dir": tmpdir
+            })
             assert "successfully" in result.lower()
 
             # Read file
-            read_result = await read_file(
-                path="index.html",
-                workspace_dir=tmpdir
-            )
+            read_result = await read_file.ainvoke({
+                "path": "index.html",
+                "workspace_dir": tmpdir
+            })
             assert read_result == test_content
 
     @pytest.mark.asyncio
     async def test_read_nonexistent_file(self):
         """Test reading a file that doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await read_file(
-                path="nonexistent.html",
-                workspace_dir=tmpdir
-            )
+            result = await read_file.ainvoke({
+                "path": "nonexistent.html",
+                "workspace_dir": tmpdir
+            })
             assert "does not exist" in result
 
     @pytest.mark.asyncio
@@ -75,10 +76,10 @@ class TestFileOperations:
             Path(tmpdir, "file1.html").write_text("<html></html>")
             Path(tmpdir, "file2.css").write_text("body { }")
 
-            result = await list_files(
-                directory=".",
-                workspace_dir=tmpdir
-            )
+            result = await list_files.ainvoke({
+                "directory": ".",
+                "workspace_dir": tmpdir
+            })
 
             assert len(result) >= 2
             assert "file1.html" in result
@@ -88,11 +89,11 @@ class TestFileOperations:
     async def test_write_creates_directory(self):
         """Test that write_to_file creates parent directories."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = await write_to_file(
-                path="src/components/button.html",
-                content="<button>Click me</button>",
-                workspace_dir=tmpdir
-            )
+            result = await write_to_file.ainvoke({
+                "path": "src/components/button.html",
+                "content": "<button>Click me</button>",
+                "workspace_dir": tmpdir
+            })
             assert "successfully" in result.lower()
 
             # Verify file was created
@@ -155,3 +156,32 @@ class TestAgentPrompts:
         assert "Build or update" in prompt
         assert spec in prompt
         assert "write_to_file" in prompt
+
+
+class TestBrowseEndpoint:
+    """Test the /api/browse directory explorer API endpoint."""
+
+    def test_browse_cwd(self):
+        """Test browsing without specifying a path (defaults to current working directory)."""
+        from fastapi.testclient import TestClient
+        from app.routes import api
+
+        client = TestClient(api)
+        response = client.get("/api/browse")
+        assert response.status_code == 200
+        data = response.json()
+        assert "current_path" in data
+        assert "directories" in data
+        assert isinstance(data["directories"], list)
+
+    def test_browse_invalid_path(self):
+        """Test browsing a nonexistent folder path."""
+        from fastapi.testclient import TestClient
+        from app.routes import api
+
+        client = TestClient(api)
+        response = client.get("/api/browse?path=nonexistent_folder_abc_123")
+        assert response.status_code == 200
+        data = response.json()
+        assert "error" in data
+        assert "does not exist" in data["error"]

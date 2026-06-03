@@ -106,6 +106,66 @@ async def generate_team_flow(request: UserRequest):
 
 
 # ---------------------------------------------------------------------------
+# Directory browsing endpoint
+# ---------------------------------------------------------------------------
+@api.get("/api/browse")
+async def browse_directory(path: str = None):
+    """Browse directories on the server's local machine."""
+    import os
+    import platform
+    try:
+        drives = []
+        is_windows = platform.system() == "Windows"
+        if is_windows:
+            import ctypes
+            bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+            for letter in map(chr, range(65, 91)):
+                if bitmask & 1:
+                    drives.append(f"{letter}:\\")
+                bitmask >>= 1
+
+        if not path:
+            current_dir = os.getcwd()
+        else:
+            current_dir = os.path.abspath(path)
+            
+        if not os.path.exists(current_dir):
+            return {"error": f"Path '{current_dir}' does not exist"}
+            
+        if not os.path.isdir(current_dir):
+            return {"error": f"Path '{current_dir}' is not a directory"}
+            
+        items = []
+        try:
+            for entry in os.scandir(current_dir):
+                try:
+                    if entry.is_dir() and not entry.name.startswith('.'):
+                        items.append(entry.name)
+                except PermissionError:
+                    continue
+        except PermissionError:
+            return {
+                "current_path": current_dir,
+                "parent_path": os.path.dirname(current_dir) if current_dir != os.path.dirname(current_dir) else None,
+                "directories": [],
+                "drives": drives,
+                "error": "Permission Denied"
+            }
+            
+        items.sort(key=str.lower)
+        
+        return {
+            "current_path": current_dir,
+            "parent_path": os.path.dirname(current_dir) if current_dir != os.path.dirname(current_dir) else None,
+            "directories": items,
+            "drives": drives
+        }
+    except Exception as e:
+        logger.error(f"Error browsing directory: {e}", exc_info=True)
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Health check endpoint
 # ---------------------------------------------------------------------------
 @api.get("/health")
